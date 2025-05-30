@@ -10,6 +10,7 @@ repositories {
 }
 
 dependencies {
+    implementation("ai.koog:koog-agents:0.1.0")
     testImplementation(kotlin("test"))
 }
 

@@ -4,49 +4,46 @@ import com.google.genai.Client
 import com.google.genai.types.*
 import kotlinx.coroutines.runBlocking
 
-val lsDeclaration =
-    FunctionDeclaration.builder().name("ls").description("List files in a specified directory")
-        .parameters(
-            Schema.builder().type(Type.Known.OBJECT).properties(
-                mapOf("path" to Schema.builder().type(Type.Known.STRING).description("Path to the directory").build())
-            ).build()
-        )
-        .response(
-            Schema.builder().type(Type.Known.OBJECT).properties(
-                mapOf(
-                    "output" to Schema.builder().type(Type.Known.STRING).description("Output of the ls command").build()
-                )
-            ).build()
-        )
-        .build()
+//val lsDeclaration =
+//    FunctionDeclaration.builder().name("ls").description("List files in a specified directory")
+//        .parameters(
+//            Schema.builder().type(Type.Known.OBJECT).properties(
+//                mapOf("path" to Schema.builder().type(Type.Known.STRING).description("Path to the directory").build())
+//            ).build()
+//        )
+//        .response(
+//            Schema.builder().type(Type.Known.OBJECT).properties(
+//                mapOf(
+//                    "output" to Schema.builder().type(Type.Known.STRING).description("Output of the ls command").build()
+//                )
+//            ).build()
+//        )
+//        .build()
 
-val shellCommandDeclaration =
-    FunctionDeclaration.builder().name("shell_command")
-        .description("Execute arbitrary command in shell and get response back")
-        .parameters(
-            Schema.builder().type(Type.Known.OBJECT).properties(
-                mapOf("command" to Schema.builder().type(Type.Known.STRING).description("Command to perform").build())
-            ).build()
-        )
-        .response(
-            Schema.builder().type(Type.Known.OBJECT).properties(
-                mapOf(
-                    "exitCode" to Schema.builder().type(Type.Known.INTEGER).description("exit code of the command")
-                        .build(),
-                    "stdout" to Schema.builder().type(Type.Known.STRING).description("stdout of the command").build(),
-                    "stderr" to Schema.builder().type(Type.Known.STRING).description("stderr of the command").build(),
-                )
-            ).build()
-        )
-        .build()
+val shellCommandDeclaration = FunctionDeclaration.builder().name("shell_command")
+    .description("Execute arbitrary command in shell and get response back").parameters(
+        Schema.builder().type(Type.Known.OBJECT).properties(
+            mapOf("command" to Schema.builder().type(Type.Known.STRING).description("Command to perform").build())
+        ).build()
+    ).response(
+        Schema.builder().type(Type.Known.OBJECT).properties(
+            mapOf(
+                "exitCode" to Schema.builder().type(Type.Known.INTEGER).description("exit code of the command").build(),
+                "stdout" to Schema.builder().type(Type.Known.STRING).description("stdout of the command").build(),
+                "stderr" to Schema.builder().type(Type.Known.STRING).description("stderr of the command").build(),
+            )
+        ).build()
+    ).build()
 
-val lsTool = Tool.builder().functionDeclarations(mutableListOf(lsDeclaration)).build()
+//val lsTool = Tool.builder().functionDeclarations(mutableListOf(lsDeclaration)).build()
 val shellCommandTool = Tool.builder().functionDeclarations(mutableListOf(shellCommandDeclaration)).build()
 
 
 fun main() = runBlocking {
     val apiKey = System.getenv("GEMINI_API_KEY")
-    val modelId = "gemini-2.0-flash"
+//    val modelId = "gemini-2.0-flash"
+//    val modelId = "gemini-2.5-flash-preview-05-20"
+    val modelId = "gemini-2.5-pro-preview-05-06"
     val client = Client.builder().apiKey(apiKey).httpOptions(HttpOptions.builder().apiVersion("v1beta").build()).build()
     val currentDir = System.getProperty("user.dir")
     val systemPrompt = """
@@ -82,38 +79,35 @@ fun main() = runBlocking {
         if (response.functionCalls() != null && response.functionCalls()!!.isNotEmpty()) {
             val f = response.functionCalls()!!.first()
             when (f.name().get()) {
-                "ls" -> {
-                    val path = f.args().get().get("path") as String
-                    val lsResult = Runtime.getRuntime().exec("ls $path")
-                    val lsOutput = lsResult.inputStream.bufferedReader().readText()
-
-                    val part = Part.builder().functionResponse(
-                        FunctionResponse.builder().name("ls").response(
-                            mapOf("output" to lsOutput)
-                        ).build()
-                    ).build()
-                    val response =
-                        client.models.generateContent(
-                            modelId,
-                            Content.builder().parts(mutableListOf(part)).build(),
-                            config
-                        )
-                    val text = response.text()
-                    history = history + "\n" + text
-                    println(text)
-                }
+//                "ls" -> {
+//                    val path = f.args().get().get("path") as String
+//                    val lsResult = Runtime.getRuntime().exec("ls $path")
+//                    val lsOutput = lsResult.inputStream.bufferedReader().readText()
+//
+//                    val part = Part.builder().functionResponse(
+//                        FunctionResponse.builder().name("ls").response(
+//                            mapOf("output" to lsOutput)
+//                        ).build()
+//                    ).build()
+//                    val response =
+//                        client.models.generateContent(
+//                            modelId,
+//                            Content.builder().parts(mutableListOf(part)).build(),
+//                            config
+//                        )
+//                    val text = response.text()
+//                    history = history + "\n" + text
+//                    println(text)
+//                }
 
                 "shell_command" -> {
                     val command = f.args().get().get("command") as String
                     println("!!! I want to execute a shell command. Do you confirm? $command")
                     val response = readLine()
                     if (response != "yes") {
-                        val response =
-                            client.models.generateContent(
-                                modelId,
-                                "I do not allow running this command",
-                                config
-                            )
+                        val response = client.models.generateContent(
+                            modelId, "I do not allow running this command", config
+                        )
                         val text = response.text()
                         history = "$history\n<bot>$userInput</bot>"
                         println(text)
@@ -139,12 +133,8 @@ fun main() = runBlocking {
                                 <exitCode>$exitCode</exitCode>
                             </function>
                         """.trimIndent()
-                        val response =
-                            client.models.generateContent(
-                                modelId,
-                                Content.builder().parts(listOf(part)).build(),
-                                config
-                            )
+                        val content = Content.builder().parts(listOf(part)).build()
+                        val response = client.models.generateContent(modelId, content, config)
                         val text = response.text()
                         history = """
                              "$history

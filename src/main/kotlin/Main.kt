@@ -4,22 +4,6 @@ import com.google.genai.Client
 import com.google.genai.types.*
 import kotlinx.coroutines.runBlocking
 
-//val lsDeclaration =
-//    FunctionDeclaration.builder().name("ls").description("List files in a specified directory")
-//        .parameters(
-//            Schema.builder().type(Type.Known.OBJECT).properties(
-//                mapOf("path" to Schema.builder().type(Type.Known.STRING).description("Path to the directory").build())
-//            ).build()
-//        )
-//        .response(
-//            Schema.builder().type(Type.Known.OBJECT).properties(
-//                mapOf(
-//                    "output" to Schema.builder().type(Type.Known.STRING).description("Output of the ls command").build()
-//                )
-//            ).build()
-//        )
-//        .build()
-
 val shellCommandDeclaration = FunctionDeclaration.builder().name("shell_command")
     .description("Execute arbitrary command in shell and get response back").parameters(
         Schema.builder().type(Type.Known.OBJECT).properties(
@@ -35,7 +19,6 @@ val shellCommandDeclaration = FunctionDeclaration.builder().name("shell_command"
         ).build()
     ).build()
 
-//val lsTool = Tool.builder().functionDeclarations(mutableListOf(lsDeclaration)).build()
 val shellCommandTool = Tool.builder().functionDeclarations(mutableListOf(shellCommandDeclaration)).build()
 
 
@@ -71,7 +54,6 @@ fun main() = runBlocking {
             <user>$userInput</user>"
         """.trimIndent()
         val tools = listOf(
-//            lsTool,
             shellCommandTool
         )
         val config = GenerateContentConfig.builder().tools(tools).build()
@@ -79,27 +61,6 @@ fun main() = runBlocking {
         if (response.functionCalls() != null && response.functionCalls()!!.isNotEmpty()) {
             val f = response.functionCalls()!!.first()
             when (f.name().get()) {
-//                "ls" -> {
-//                    val path = f.args().get().get("path") as String
-//                    val lsResult = Runtime.getRuntime().exec("ls $path")
-//                    val lsOutput = lsResult.inputStream.bufferedReader().readText()
-//
-//                    val part = Part.builder().functionResponse(
-//                        FunctionResponse.builder().name("ls").response(
-//                            mapOf("output" to lsOutput)
-//                        ).build()
-//                    ).build()
-//                    val response =
-//                        client.models.generateContent(
-//                            modelId,
-//                            Content.builder().parts(mutableListOf(part)).build(),
-//                            config
-//                        )
-//                    val text = response.text()
-//                    history = history + "\n" + text
-//                    println(text)
-//                }
-
                 "shell_command" -> {
                     val command = f.args().get().get("command") as String
                     println("!!! I want to execute a shell command. Do you confirm? $command")

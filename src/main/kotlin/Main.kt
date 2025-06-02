@@ -42,9 +42,6 @@ fun main() {
         
         When answering a user read entire history of the conversation.
         
-        Do not ask permission to use tools, just use them.
-        
-        
         Good luck!
     """.trimIndent()
     val first = Content.builder().role("user").parts(listOf(Part.builder().text(firstPrompt).build())).build()
@@ -70,6 +67,7 @@ fun main() {
         val currentPrompt = pendingPrompts.removeFirst()
         history.add(currentPrompt)
         val response = client.models.generateContent(modelId, history, config)
+        history.add(response.candidates().get().first().content().get())
 
 
         if (response.functionCalls() != null && response.functionCalls()!!.isNotEmpty()) {
@@ -81,11 +79,9 @@ fun main() {
                     println("!!! I want to execute a shell command. Do you confirm? $command")
                     val response = readLine()
                     if (response != "yes") {
-                        val response = client.models.generateContent(
-                            modelId, "I do not allow running this command", config
-                        )
-                        val text = response.text()
-                        println(text)
+                        val content = Content.builder().role("user")
+                            .parts(listOf(Part.builder().text("I do not allow running this command").build())).build()
+                        pendingPrompts.add(content)
                     } else {
                         val process = Runtime.getRuntime().exec(command)
                         val exitCode = process.waitFor()

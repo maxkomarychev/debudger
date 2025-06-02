@@ -43,7 +43,7 @@ fun main() = runBlocking {
         When answering a user read entire history of the conversation.
         Do not ask permission to use tools, just use them.
     """.trimIndent()
-    var history = systemPrompt
+    var history = "" //systemPrompt
     while (true) {
         val userInput = readLine()
         if (userInput == "exit") {
@@ -77,8 +77,8 @@ fun main() = runBlocking {
                         val exitCode = process.waitFor()
                         val stdout = process.inputStream.bufferedReader().readText()
                         val stderr = process.errorStream.bufferedReader().readText()
-                        val part = Part.builder().functionResponse(
-                            FunctionResponse.builder().name("shell_command").response(
+                        val partFunctionResponse = Part.builder().functionResponse(
+                            FunctionResponse.builder().name(f.name().get()).response(
                                 mapOf(
                                     "exitCode" to exitCode,
                                     "stdout" to stdout,
@@ -86,6 +86,7 @@ fun main() = runBlocking {
                                 )
                             ).build()
                         ).build()
+                        val partFunctionCall = Part.builder().functionCall(f).build()
                         history = """
                             $history
                             <function name="shell_command" command="$command">
@@ -94,8 +95,17 @@ fun main() = runBlocking {
                                 <exitCode>$exitCode</exitCode>
                             </function>
                         """.trimIndent()
-                        val content = Content.builder().parts(listOf(part)).build()
-                        val response = client.models.generateContent(modelId, content, config)
+                        val historyPart =
+                            Content.builder().role("user").parts(listOf(Part.builder().text(history).build())).build()
+                        val contentFunctionCall =
+                            Content.builder().role("model").parts(listOf(partFunctionCall)).build()
+                        val contentFunctionResponse =
+                            Content.builder().role("user").parts(listOf(partFunctionResponse)).build()
+                        val response = client.models.generateContent(
+                            modelId,
+                            listOf(historyPart, contentFunctionCall, contentFunctionResponse),
+                            config
+                        )
                         val text = response.text()
                         history = """
                              "$history

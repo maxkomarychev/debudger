@@ -12,7 +12,7 @@ repositories {
 
 dependencies {
     implementation("ai.koog:koog-agents:0.1.0")
-    implementation("com.google.genai:google-genai:1.1.0")
+    implementation("com.google.genai:google-genai:1.2.0")
     testImplementation(kotlin("test"))
 }
 

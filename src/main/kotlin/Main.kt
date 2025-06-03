@@ -21,6 +21,31 @@ val shellCommandDeclaration = FunctionDeclaration.builder().name("shell_command"
 val shellCommandTool = Tool.builder().functionDeclarations(mutableListOf(shellCommandDeclaration)).build()
 
 
+val writeFileDeclaration = FunctionDeclaration.builder().name("write_file")
+    .description("Write content to a specified file.")
+    .parameters(
+        Schema.builder().type(Type.Known.OBJECT).properties(
+            mapOf(
+                "file_name" to Schema.builder().type(Type.Known.STRING).description("Name of the file to write.")
+                    .build(),
+                "content" to Schema.builder().type(Type.Known.STRING).description("Content to write into the file.")
+                    .build()
+            )
+        ).build()
+    )
+    .response( // Optional: Define a meaningful response
+        Schema.builder().type(Type.Known.OBJECT).properties(
+            mapOf(
+                "status" to Schema.builder().type(Type.Known.STRING).description("Status of the file write operation")
+                    .build()
+            )
+        ).build()
+    )
+    .build()
+
+val writeFileTool = Tool.builder().functionDeclarations(mutableListOf(writeFileDeclaration)).build()
+
+
 fun main() {
     val apiKey = System.getenv("GEMINI_API_KEY")
 //    val modelId = "gemini-2.0-flash"
@@ -47,7 +72,8 @@ fun main() {
     val first = Content.builder().role("user").parts(listOf(Part.builder().text(firstPrompt).build())).build()
     val history = mutableListOf(first)
     val tools = listOf(
-        shellCommandTool
+        shellCommandTool,
+        writeFileTool
     )
 
     val pendingPrompts = mutableListOf<Content>()
@@ -100,6 +126,35 @@ fun main() {
                             Content.builder().role("user").parts(listOf(partFunctionResponse)).build()
                         pendingPrompts.add(contentFunctionResponse)
                     }
+                }
+
+                "write_file" -> { // 4. Handle the new function call
+                    val fileName = functionCall.args().get().get("file_name") as String
+                    val fileContent = functionCall.args().get().get("content") as String
+
+                    println("!!! I want to write to the file $fileName. Do you confirm?")
+                    val userConfirmation = readLine()
+
+                    var statusMessage: String
+                    if (userConfirmation == "yes") {
+                        try {
+                            java.io.File(fileName).writeText(fileContent)
+                            statusMessage = "Successfully wrote to $fileName"
+                        } catch (e: Exception) {
+                            statusMessage = "Error writing to $fileName: ${e.message}"
+                        }
+                    } else {
+                        statusMessage = "File write operation to $fileName was cancelled by the user."
+                    }
+
+                    val partFunctionResponse = Part.builder().functionResponse(
+                        FunctionResponse.builder().name(functionName).response(
+                            mapOf("status" to statusMessage)
+                        ).build()
+                    ).build()
+                    val contentFunctionResponse =
+                        Content.builder().role("user").parts(listOf(partFunctionResponse)).build()
+                    pendingPrompts.add(contentFunctionResponse)
                 }
             }
         } else if (response.text() != null) {

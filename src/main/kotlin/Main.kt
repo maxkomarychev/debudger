@@ -63,6 +63,8 @@ fun main() {
 
         If user is asking to do something first consider using shell_command with any of known CLI tools.
         
+        Your goal is to solve my technical problem. Use any available tools at your discretion whenever you believe it will help you achieve this goal. Don't ask for permission before using a tool; if you think it's necessary, use it.
+        
         Your current directory is $currentDir.
         
         When answering a user read entire history of the conversation.

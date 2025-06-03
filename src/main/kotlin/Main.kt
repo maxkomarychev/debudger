@@ -18,7 +18,6 @@ val shellCommandDeclaration = FunctionDeclaration.builder().name("shell_command"
         ).build()
     ).build()
 
-val shellCommandTool = Tool.builder().functionDeclarations(mutableListOf(shellCommandDeclaration)).build()
 
 
 val writeFileDeclaration = FunctionDeclaration.builder().name("write_file")
@@ -43,7 +42,6 @@ val writeFileDeclaration = FunctionDeclaration.builder().name("write_file")
     )
     .build()
 
-val writeFileTool = Tool.builder().functionDeclarations(mutableListOf(writeFileDeclaration)).build()
 
 
 fun main() {
@@ -74,8 +72,12 @@ fun main() {
     val first = Content.builder().role("user").parts(listOf(Part.builder().text(firstPrompt).build())).build()
     val history = mutableListOf(first)
     val tools = listOf(
-        shellCommandTool,
-        writeFileTool
+        Tool.builder().functionDeclarations(
+            listOf(
+                shellCommandDeclaration,
+                writeFileDeclaration,
+            )
+        ).build(),
     )
 
     val pendingPrompts = mutableListOf<Content>()

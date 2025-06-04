@@ -1,5 +1,6 @@
 package com.aiagent
 
+import com.aiagent.com.aiagent.utils.generateSchemaFromDataClass
 import com.google.genai.types.Schema
 import com.google.genai.types.Type
 import org.junit.jupiter.api.Assertions
@@ -51,13 +52,17 @@ class SchemaGeneratorTest {
     fun `test PrimitivesWithDocs data class for descriptions`() {
         val expectedSchema = Schema.builder()
             .type(Type.Known.OBJECT)
-            .properties(mapOf(
-                "S_str" to Schema.builder().type(Type.Known.STRING).description("A string value.").build(),
-                "S_int" to Schema.builder().type(Type.Known.INTEGER).description("An integer value.").build(),
-                "S_bool" to Schema.builder().type(Type.Known.BOOLEAN).build(), // No description
-                "S_long" to Schema.builder().type(Type.Known.INTEGER).description("A long value, doc on constructor param.").build(),
-                "S_double" to Schema.builder().type(Type.Known.NUMBER).description("Property doc takes precedence.").build()
-            ))
+            .properties(
+                mapOf(
+                    "S_str" to Schema.builder().type(Type.Known.STRING).description("A string value.").build(),
+                    "S_int" to Schema.builder().type(Type.Known.INTEGER).description("An integer value.").build(),
+                    "S_bool" to Schema.builder().type(Type.Known.BOOLEAN).build(), // No description
+                    "S_long" to Schema.builder().type(Type.Known.INTEGER)
+                        .description("A long value, doc on constructor param.").build(),
+                    "S_double" to Schema.builder().type(Type.Known.NUMBER).description("Property doc takes precedence.")
+                        .build()
+                )
+            )
             .build()
 
         val actualSchema = generateSchemaFromDataClass(PrimitivesWithDocs::class)
@@ -73,18 +78,21 @@ class SchemaGeneratorTest {
 
         val expectedSchema = Schema.builder()
             .type(Type.Known.OBJECT)
-            .properties(mapOf(
-                "WN_name" to Schema.builder().type(Type.Known.STRING).description("Name of the main entity.").build(),
-                "WN_item" to Schema.builder()
-                    .type(Type.Known.OBJECT)
-                    .description("The nested item itself. This describes the field holding the item.")
-                    .properties(expectedNestedItemSchemaProperties)
-                    .build(),
-                "WN_tags" to Schema.builder().type(Type.Known.ARRAY)
-                    .items(Schema.builder().type(Type.Known.STRING).build()) // Item schema for List<String>
-                    .description("A list of tags for this entity.") // Description for the list property itself
-                    .build()
-            ))
+            .properties(
+                mapOf(
+                    "WN_name" to Schema.builder().type(Type.Known.STRING).description("Name of the main entity.")
+                        .build(),
+                    "WN_item" to Schema.builder()
+                        .type(Type.Known.OBJECT)
+                        .description("The nested item itself. This describes the field holding the item.")
+                        .properties(expectedNestedItemSchemaProperties)
+                        .build(),
+                    "WN_tags" to Schema.builder().type(Type.Known.ARRAY)
+                        .items(Schema.builder().type(Type.Known.STRING).build()) // Item schema for List<String>
+                        .description("A list of tags for this entity.") // Description for the list property itself
+                        .build()
+                )
+            )
             .build()
 
         val actualSchema = generateSchemaFromDataClass(NestingWithDocs::class)
@@ -98,25 +106,30 @@ class SchemaGeneratorTest {
             @ToolDoc("ID of the list item") val id: Int,
             @ToolDoc("Value of the list item") val value: String
         )
+
         data class ContainerOfList(
             @ToolDoc("A list of documented items") val items: List<NestedItemForList>
         )
 
         val expectedItemSchema = Schema.builder()
             .type(Type.Known.OBJECT)
-            .properties(mapOf(
-                "id" to Schema.builder().type(Type.Known.INTEGER).description("ID of the list item").build(),
-                "value" to Schema.builder().type(Type.Known.STRING).description("Value of the list item").build()
-            )).build()
+            .properties(
+                mapOf(
+                    "id" to Schema.builder().type(Type.Known.INTEGER).description("ID of the list item").build(),
+                    "value" to Schema.builder().type(Type.Known.STRING).description("Value of the list item").build()
+                )
+            ).build()
 
         val expectedSchema = Schema.builder()
             .type(Type.Known.OBJECT)
-            .properties(mapOf(
-                "items" to Schema.builder().type(Type.Known.ARRAY)
-                    .description("A list of documented items")
-                    .items(expectedItemSchema)
-                    .build()
-            )).build()
+            .properties(
+                mapOf(
+                    "items" to Schema.builder().type(Type.Known.ARRAY)
+                        .description("A list of documented items")
+                        .items(expectedItemSchema)
+                        .build()
+                )
+            ).build()
 
         val actualSchema = generateSchemaFromDataClass(ContainerOfList::class)
         Assertions.assertEquals(expectedSchema, actualSchema)

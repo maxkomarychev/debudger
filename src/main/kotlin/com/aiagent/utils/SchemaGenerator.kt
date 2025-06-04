@@ -15,7 +15,7 @@ fun KClass<*>.toSchemaType(): Type.Known {
         Boolean::class -> Type.Known.BOOLEAN
         Double::class, Float::class -> Type.Known.NUMBER
         List::class -> Type.Known.ARRAY
-        else -> if (this.isData) Type.Known.OBJECT else Type.Known.STRING
+        else -> if (this.isData) Type.Known.OBJECT else throw IllegalStateException("Unexpected type: ${this::class}")
     }
 }
 

@@ -3,12 +3,21 @@ package com.aiagent
 import com.google.genai.Client
 import com.google.genai.types.*
 import kotlin.jvm.optionals.getOrNull
-
 import kotlin.reflect.KClass
+import kotlin.reflect.full.findAnnotation
 import kotlin.reflect.full.memberProperties
-import com.google.genai.types.Schema
-import com.google.genai.types.Type
+import kotlin.reflect.full.primaryConstructor
 
+
+@Target(
+    AnnotationTarget.CLASS,          // For describing the data class itself (if needed by a higher-level consumer)
+    AnnotationTarget.PROPERTY,       // For describing a property
+    AnnotationTarget.VALUE_PARAMETER // For describing a constructor parameter
+)
+@Retention(AnnotationRetention.RUNTIME) // Essential: Makes it available at runtime via reflection
+annotation class ToolDoc(val description: String)
+
+// KClass<*>.toSchemaType() helper function (same as before)
 fun KClass<*>.toSchemaType(): Type.Known {
     return when (this) {
         String::class -> Type.Known.STRING
@@ -16,40 +25,17 @@ fun KClass<*>.toSchemaType(): Type.Known {
         Boolean::class -> Type.Known.BOOLEAN
         Double::class, Float::class -> Type.Known.NUMBER
         List::class -> Type.Known.ARRAY
-        // For data classes used as nested objects, the type is OBJECT,
-        // and its schema is generated recursively.
-        else -> if (this.isData) Type.Known.OBJECT else Type.Known.STRING // Default for others
+        else -> if (this.isData) Type.Known.OBJECT else Type.Known.STRING
     }
-}
-
-fun generateSchemaFromDataClass3(dataClass: KClass<*>): Schema {
-    val properties = dataClass.memberProperties.map { prop ->
-        val propertyName = prop.name
-        val propertyType = prop.returnType.classifier as? KClass<*>
-        val schemaType = when (propertyType) {
-            String::class -> Type.Known.STRING
-            Int::class, Long::class, Short::class, Byte::class -> Type.Known.INTEGER // Or NUMBER for more flexibility
-            Boolean::class -> Type.Known.BOOLEAN
-            Double::class, Float::class -> Type.Known.NUMBER
-            List::class -> Type.Known.ARRAY // You'll need to handle item types for arrays
-            Map::class -> Type.Known.OBJECT // You'll need to handle nested objects/map value types
-            // Add more type mappings as needed
-            else -> Type.Known.STRING // Default or throw error
-        }
-        // You might want to add descriptions, possibly from annotations on the data class properties
-        propertyName to Schema.builder().type(schemaType).description("Description for $propertyName").build()
-    }.toMap()
-
-    return Schema.builder().type(Type.Known.OBJECT).properties(properties).build()
 }
 
 fun generateSchemaFromDataClass(dataClass: KClass<*>): Schema {
     if (!dataClass.isData) {
-        // Or handle non-data classes differently if needed
         throw IllegalArgumentException("Input class '${dataClass.simpleName}' must be a data class.")
     }
 
     val propertiesSchema = mutableMapOf<String, Schema>()
+    val primaryConstructor = dataClass.primaryConstructor
 
     dataClass.memberProperties.forEach { prop ->
         val propertyName = prop.name
@@ -57,43 +43,85 @@ fun generateSchemaFromDataClass(dataClass: KClass<*>): Schema {
         val classifier = returnType.classifier as? KClass<*>
             ?: throw IllegalStateException("Could not determine classifier for property ${prop.name}")
 
+        // Find description:
+        // 1. From @ToolDoc on the property itself.
+        // 2. From @ToolDoc on the corresponding constructor parameter.
+        var description: String? = prop.findAnnotation<ToolDoc>()?.description
+        if (description == null) {
+            primaryConstructor?.parameters?.find { it.name == prop.name }?.let { constructorParam ->
+                description = constructorParam.findAnnotation<ToolDoc>()?.description
+            }
+        }
+
         val propertySchemaBuilder = Schema.builder()
 
-        // Handle general type mapping
+        // Set type
         propertySchemaBuilder.type(classifier.toSchemaType())
 
+        // Set description if found
+        description?.let { propertySchemaBuilder.description(it) }
+
         if (classifier == List::class) {
-            // Determine the type of items in the list
             val listItemType = returnType.arguments.firstOrNull()?.type?.classifier as? KClass<*>
+            val listItemSchemaBuilder = Schema.builder()
             if (listItemType != null) {
                 if (listItemType.isData) {
-                    // If list items are data classes, generate their schema
                     propertySchemaBuilder.items(generateSchemaFromDataClass(listItemType))
                 } else {
-                    // For primitive list items
-                    propertySchemaBuilder.items(Schema.builder().type(listItemType.toSchemaType()).build())
+                    listItemSchemaBuilder.type(listItemType.toSchemaType())
+                    // Note: KDoc on list item type's declaration itself (e.g. @ToolDoc class MyListItem)
+                    // won't be automatically picked up here for the items schema directly.
+                    // For complex item descriptions, the item would likely be a data class.
+                    propertySchemaBuilder.items(listItemSchemaBuilder.build())
                 }
             } else {
-                // Fallback for List<*> or unknown item type (e.g., treat as List<String>)
-                propertySchemaBuilder.items(Schema.builder().type(Type.Known.STRING).build())
+                propertySchemaBuilder.items(listItemSchemaBuilder.type(Type.Known.STRING).build()) // Fallback
             }
-            propertiesSchema[propertyName] = propertySchemaBuilder.build()
         } else if (classifier.isData) {
-            // For a nested data class property, the schema *is* the schema of that nested class
-            propertiesSchema[propertyName] = generateSchemaFromDataClass(classifier)
+            // The property 'propertyName' is of a data class type 'classifier'.
+            // The schema for this property will be an OBJECT type.
+            // The description comes from @ToolDoc on 'propertyName'.
+            // The properties of this OBJECT schema come from 'classifier'.
+            val nestedObjectClassSchema = generateSchemaFromDataClass(classifier) // Get schema of the nested data class
+            val propertySchema = Schema.builder().type(Type.Known.OBJECT) // Property type is OBJECT
+            description?.let { propertySchema.description(it) }         // Description for this property
+            propertySchema.properties(nestedObjectClassSchema.properties().get()) // Properties from nested class
+            propertiesSchema[propertyName] = propertySchema.build()
         } else {
-            // For simple properties
+            // For simple properties and lists (lists are handled above)
             propertiesSchema[propertyName] = propertySchemaBuilder.build()
         }
-        // TODO: Add handling for nullability (prop.returnType.isMarkedNullable)
-        //       This depends on how the Gemini Schema represents optional/required.
-        //       Often, the absence of a property in a request implies it's optional,
-        //       or the schema itself can mark fields as required.
-        // TODO: Add support for descriptions via annotations
-    }
+        // else simple property, type and description are already set.
 
+        // Add to map if not already handled by nested data class assignment
+        if (!classifier.isData) {
+            propertiesSchema[propertyName] = propertySchemaBuilder.build()
+        } else {
+            // If it's a data class, we've built its schema slightly differently to include the description
+            // on the property holding the data class.
+            val nestedSchema = generateSchemaFromDataClass(classifier)
+            val builderForPropertyHoldingNested = Schema.builder().type(Type.Known.OBJECT)
+            description?.let { builderForPropertyHoldingNested.description(it) }
+            builderForPropertyHoldingNested.properties(nestedSchema.properties().get()) // Carry over nested properties
+            propertiesSchema[propertyName] = builderForPropertyHoldingNested.build()
+
+        }
+    }
+    // Note: @ToolDoc on the dataClass KClass itself is not used in this function to describe the
+    // returned object schema's top level, as the Gemini Schema for OBJECT typically
+    // describes its properties. It could be used by the caller (e.g. generateFunctionDeclaration).
     return Schema.builder().type(Type.Known.OBJECT).properties(propertiesSchema).build()
 }
+
+data class ShellCommandInput(
+    val command: String
+)
+
+data class ShellCommandOutput(
+    val exitCode: Int,
+    val stdout: String,
+    val stderr: String,
+)
 
 val shellCommandDeclaration = FunctionDeclaration.builder().name("shell_command")
     .description("Execute arbitrary command in shell and get response back").parameters(
@@ -109,7 +137,6 @@ val shellCommandDeclaration = FunctionDeclaration.builder().name("shell_command"
             )
         ).build()
     ).build()
-
 
 
 val writeFileDeclaration = FunctionDeclaration.builder().name("write_file")
@@ -133,7 +160,6 @@ val writeFileDeclaration = FunctionDeclaration.builder().name("write_file")
         ).build()
     )
     .build()
-
 
 
 fun main() {
@@ -255,14 +281,18 @@ fun main() {
             }
         } else if (response.text() != null) {
             println("< ${response.text()}")
-            println("""
+            println(
+                """
                 Usage:
                   tokens total: ${response.usageMetadata().getOrNull()?.totalTokenCount()?.getOrNull()}
                   tokens prompt (in): ${response.usageMetadata().getOrNull()?.promptTokenCount()?.getOrNull()}
-                  tokens candidates (out): ${response.usageMetadata().getOrNull()?.cachedContentTokenCount()?.getOrNull()}
+                  tokens candidates (out): ${
+                    response.usageMetadata().getOrNull()?.cachedContentTokenCount()?.getOrNull()
+                }
                   tokens cached: ${response.usageMetadata().getOrNull()?.cachedContentTokenCount()?.getOrNull()}
                   tokens tools: ${response.usageMetadata().getOrNull()?.toolUsePromptTokenCount()?.getOrNull()}
-            """.trimIndent())
+            """.trimIndent()
+            )
         }
     }
 }

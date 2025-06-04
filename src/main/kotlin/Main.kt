@@ -2,6 +2,98 @@ package com.aiagent
 
 import com.google.genai.Client
 import com.google.genai.types.*
+import kotlin.jvm.optionals.getOrNull
+
+import kotlin.reflect.KClass
+import kotlin.reflect.full.memberProperties
+import com.google.genai.types.Schema
+import com.google.genai.types.Type
+
+fun KClass<*>.toSchemaType(): Type.Known {
+    return when (this) {
+        String::class -> Type.Known.STRING
+        Int::class, Long::class, Short::class, Byte::class -> Type.Known.INTEGER
+        Boolean::class -> Type.Known.BOOLEAN
+        Double::class, Float::class -> Type.Known.NUMBER
+        List::class -> Type.Known.ARRAY
+        // For data classes used as nested objects, the type is OBJECT,
+        // and its schema is generated recursively.
+        else -> if (this.isData) Type.Known.OBJECT else Type.Known.STRING // Default for others
+    }
+}
+
+fun generateSchemaFromDataClass3(dataClass: KClass<*>): Schema {
+    val properties = dataClass.memberProperties.map { prop ->
+        val propertyName = prop.name
+        val propertyType = prop.returnType.classifier as? KClass<*>
+        val schemaType = when (propertyType) {
+            String::class -> Type.Known.STRING
+            Int::class, Long::class, Short::class, Byte::class -> Type.Known.INTEGER // Or NUMBER for more flexibility
+            Boolean::class -> Type.Known.BOOLEAN
+            Double::class, Float::class -> Type.Known.NUMBER
+            List::class -> Type.Known.ARRAY // You'll need to handle item types for arrays
+            Map::class -> Type.Known.OBJECT // You'll need to handle nested objects/map value types
+            // Add more type mappings as needed
+            else -> Type.Known.STRING // Default or throw error
+        }
+        // You might want to add descriptions, possibly from annotations on the data class properties
+        propertyName to Schema.builder().type(schemaType).description("Description for $propertyName").build()
+    }.toMap()
+
+    return Schema.builder().type(Type.Known.OBJECT).properties(properties).build()
+}
+
+fun generateSchemaFromDataClass(dataClass: KClass<*>): Schema {
+    if (!dataClass.isData) {
+        // Or handle non-data classes differently if needed
+        throw IllegalArgumentException("Input class '${dataClass.simpleName}' must be a data class.")
+    }
+
+    val propertiesSchema = mutableMapOf<String, Schema>()
+
+    dataClass.memberProperties.forEach { prop ->
+        val propertyName = prop.name
+        val returnType = prop.returnType
+        val classifier = returnType.classifier as? KClass<*>
+            ?: throw IllegalStateException("Could not determine classifier for property ${prop.name}")
+
+        val propertySchemaBuilder = Schema.builder()
+
+        // Handle general type mapping
+        propertySchemaBuilder.type(classifier.toSchemaType())
+
+        if (classifier == List::class) {
+            // Determine the type of items in the list
+            val listItemType = returnType.arguments.firstOrNull()?.type?.classifier as? KClass<*>
+            if (listItemType != null) {
+                if (listItemType.isData) {
+                    // If list items are data classes, generate their schema
+                    propertySchemaBuilder.items(generateSchemaFromDataClass(listItemType))
+                } else {
+                    // For primitive list items
+                    propertySchemaBuilder.items(Schema.builder().type(listItemType.toSchemaType()).build())
+                }
+            } else {
+                // Fallback for List<*> or unknown item type (e.g., treat as List<String>)
+                propertySchemaBuilder.items(Schema.builder().type(Type.Known.STRING).build())
+            }
+            propertiesSchema[propertyName] = propertySchemaBuilder.build()
+        } else if (classifier.isData) {
+            // For a nested data class property, the schema *is* the schema of that nested class
+            propertiesSchema[propertyName] = generateSchemaFromDataClass(classifier)
+        } else {
+            // For simple properties
+            propertiesSchema[propertyName] = propertySchemaBuilder.build()
+        }
+        // TODO: Add handling for nullability (prop.returnType.isMarkedNullable)
+        //       This depends on how the Gemini Schema represents optional/required.
+        //       Often, the absence of a property in a request implies it's optional,
+        //       or the schema itself can mark fields as required.
+        // TODO: Add support for descriptions via annotations
+    }
+
+    return Schema.builder().type(Type.Known.OBJECT).properties(propertiesSchema).build()
+}
 
 val shellCommandDeclaration = FunctionDeclaration.builder().name("shell_command")
     .description("Execute arbitrary command in shell and get response back").parameters(
@@ -163,6 +255,14 @@ fun main() {
             }
         } else if (response.text() != null) {
             println("< ${response.text()}")
+            println("""
+                Usage:
+                  tokens total: ${response.usageMetadata().getOrNull()?.totalTokenCount()?.getOrNull()}
+                  tokens prompt (in): ${response.usageMetadata().getOrNull()?.promptTokenCount()?.getOrNull()}
+                  tokens candidates (out): ${response.usageMetadata().getOrNull()?.cachedContentTokenCount()?.getOrNull()}
+                  tokens cached: ${response.usageMetadata().getOrNull()?.cachedContentTokenCount()?.getOrNull()}
+                  tokens tools: ${response.usageMetadata().getOrNull()?.toolUsePromptTokenCount()?.getOrNull()}
+            """.trimIndent())
         }
     }
 }

@@ -1,5 +1,6 @@
-package com.aiagent
+package com.aiagent.com.aiagent.utils
 
+import com.aiagent.ToolDoc
 import com.google.genai.types.Schema
 import com.google.genai.types.Type
 import kotlin.reflect.KClass

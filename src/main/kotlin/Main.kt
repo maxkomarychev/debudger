@@ -1,47 +1,16 @@
 package com.aiagent
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.aiagent.com.aiagent.utils.generateSchemaFromDataClass
+import com.aiagent.tools.shellcommand.ShellCommandInput
+import com.aiagent.tools.shellcommand.ShellCommandOutput
+import com.aiagent.tools.shellcommand.shellCommand
+import com.aiagent.tools.writefile.WriteFileOutput
+import com.aiagent.tools.writefile.writeFile
+import com.aiagent.utils.createInstanceFromMapWithJackson
 import com.google.genai.Client
 import com.google.genai.types.*
 import kotlin.jvm.optionals.getOrNull
-import kotlin.reflect.KClass
 
-val objectMapper = ObjectMapper().registerModule(KotlinModule.Builder().build())
-
-fun <T : Any> createInstanceFromMapWithJackson(dataClass: KClass<T>, map: Map<String, Any?>): T {
-    // Jackson's convertValue is very powerful for this.
-    return objectMapper.convertValue(map, dataClass.java) // Uses Java Class here
-}
-
-
-data class ShellCommandInput(
-    @ToolDoc("Command to perform in shell") val command: String
-)
-
-data class ShellCommandOutput(
-    @ToolDoc("Exit code of the command. 0 means success.") val exitCode: Int,
-    @ToolDoc("Standard output of the command") val stdout: String,
-    @ToolDoc("Error output of the command") val stderr: String,
-)
-
-suspend fun shellCommand(input: ShellCommandInput): ShellCommandOutput {
-    val process = Runtime.getRuntime().exec(input.command)
-    val exitCode = process.waitFor()
-    val stdout = process.inputStream.bufferedReader().readText()
-    val stderr = process.errorStream.bufferedReader().readText()
-    return ShellCommandOutput(exitCode, stdout, stderr)
-}
-
-suspend fun writeFile(input: WriteFileInput): WriteFileOutput {
-    return try {
-        java.io.File(input.fileName).writeText(input.content)
-        WriteFileOutput(success = true, error = null)
-    } catch (e: Exception) {
-        val errorMessage = "Error writing to ${input.fileName}: ${e.message}"
-        WriteFileOutput(success = false, error = errorMessage)
-    }
-}
 
 val shellCommandDeclaration = FunctionDeclaration.builder().name("shell_command")
     .description("Execute arbitrary command in shell and get response back").parameters(
@@ -51,16 +20,6 @@ val shellCommandDeclaration = FunctionDeclaration.builder().name("shell_command"
 
     ).build()
 
-
-data class WriteFileInput(
-    @ToolDoc("Name of the file to write") val fileName: String,
-    @ToolDoc("Content of the file") val content: String,
-)
-
-data class WriteFileOutput(
-    @ToolDoc("Indicator of success") val success: Boolean,
-    @ToolDoc("Error message in case of an error") val error: String?,
-) {}
 
 val writeFileDeclaration =
     FunctionDeclaration.builder().name("write_file").description("Write content to a specified file.")

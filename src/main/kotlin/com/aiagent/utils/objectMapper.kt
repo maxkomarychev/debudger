@@ -9,4 +9,8 @@ fun <T : Any> createInstanceFromMapWithJackson(dataClass: KClass<T>, map: Map<St
     return objectMapper.convertValue(map, dataClass.java) // Uses Java Class here
 }
 
+fun <T: Any> dataClassToMap(value: T): Map<String, Any> {
+    return objectMapper.convertValue(value, Map::class.java) as Map<String, Any>
+}
+
 val objectMapper = ObjectMapper().registerModule(KotlinModule.Builder().build())

@@ -7,6 +7,7 @@ import com.aiagent.tools.shellcommand.shellCommand
 import com.aiagent.tools.writefile.WriteFileOutput
 import com.aiagent.tools.writefile.writeFile
 import com.aiagent.utils.createInstanceFromMapWithJackson
+import com.aiagent.utils.dataClassToMap
 import com.google.genai.Client
 import com.google.genai.types.*
 import kotlin.jvm.optionals.getOrNull
@@ -101,11 +102,7 @@ suspend fun main() {
                         val output = shellCommand(input)
                         val partFunctionResponse = Part.builder().functionResponse(
                             FunctionResponse.builder().name(functionName).response(
-                                mapOf(
-                                    "exitCode" to output.exitCode,
-                                    "stdout" to output.stdout,
-                                    "stderr" to output.stderr,
-                                )
+                                dataClassToMap(output)
                             ).build()
                         ).build()
                         val contentFunctionResponse =
@@ -128,12 +125,7 @@ suspend fun main() {
                     }
 
                     val partFunctionResponse = Part.builder().functionResponse(
-                        FunctionResponse.builder().name(functionName).response(
-                            mapOf(
-                                "success" to result.success,
-                                "error" to result.error,
-                            )
-                        ).build()
+                        FunctionResponse.builder().name(functionName).response(dataClassToMap(result)).build()
                     ).build()
                     val contentFunctionResponse =
                         Content.builder().role("user").parts(listOf(partFunctionResponse)).build()

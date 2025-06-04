@@ -45,7 +45,7 @@ val writeFileDeclaration = FunctionDeclaration.builder().name("write_file")
 
 
 fun main() {
-    val apiKey = System.getenv("GEMINI_API_KEY")
+    val apiKey = System.getenv("GEMINI_KEY")
 //    val modelId = "gemini-2.0-flash"
 //    val modelId = "gemini-2.5-flash-preview-05-20"
     val modelId = "gemini-2.5-pro-preview-05-06"

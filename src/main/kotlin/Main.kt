@@ -18,8 +18,8 @@ val functionsMap = functions.groupBy { it::class.findAnnotation<ToolName>()!!.na
 suspend fun main() {
     val apiKey = System.getenv("GEMINI_KEY")
 //    val modelId = "gemini-2.0-flash"
-//    val modelId = "gemini-2.5-flash-preview-05-20"
-    val modelId = "gemini-2.5-pro-preview-06-05"
+    val modelId = "gemini-2.5-flash-preview-05-20"
+//    val modelId = "gemini-2.5-pro-preview-06-05"
     val client = Client.builder().apiKey(apiKey).httpOptions(HttpOptions.builder().apiVersion("v1beta").build()).build()
     val currentDir = System.getProperty("user.dir")
     val firstPrompt = """
@@ -69,7 +69,10 @@ suspend fun main() {
             val args = functionCall.args().get()
             val function = functionsMap[functionName] ?: throw IllegalStateException("Unknown function: $functionName")
             val functionPrompt = function.prompt(input = args)
-            println("!!! Function call ${functionPrompt}. Do you confirm?")
+            println(
+                """!!! Function call ${functionPrompt}
+                Do you confirm?""".trimIndent()
+            )
             val response = readLine()
             if (response != "yes") {
                 val content = Content.builder().role("user")

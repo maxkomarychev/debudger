@@ -1,6 +1,9 @@
 package com.aiagent
 
+import com.aiagent.com.aiagent.tools.AiFunctionInput
+import com.aiagent.com.aiagent.tools.ToolDescription
+
 data class WriteFileInput(
-    @ToolDoc("Name of the file to write") val fileName: String,
-    @ToolDoc("Content of the file") val content: String,
-)
+    @ToolDescription("Name of the file to write") val fileName: String,
+    @ToolDescription("Content of the file") val content: String,
+) : AiFunctionInput

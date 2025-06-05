@@ -1,33 +1,19 @@
 package com.aiagent
 
-import com.aiagent.com.aiagent.utils.generateSchemaFromDataClass
-import com.aiagent.tools.shellcommand.ShellCommandInput
-import com.aiagent.tools.shellcommand.ShellCommandOutput
-import com.aiagent.tools.shellcommand.shellCommand
-import com.aiagent.tools.writefile.WriteFileOutput
-import com.aiagent.tools.writefile.writeFile
-import com.aiagent.utils.createInstanceFromMapWithJackson
+import com.aiagent.com.aiagent.tools.ToolName
+import com.aiagent.com.aiagent.tools.shellcommand.ShellCommandFunction
+import com.aiagent.com.aiagent.tools.writefile.WriteFileFunction
+import com.aiagent.com.aiagent.utils.toFunctionDeclaration
 import com.aiagent.utils.dataClassToMap
 import com.google.genai.Client
 import com.google.genai.types.*
 import kotlin.jvm.optionals.getOrNull
+import kotlin.reflect.full.findAnnotation
 
 
-val shellCommandDeclaration = FunctionDeclaration.builder().name("shell_command")
-    .description("Execute arbitrary command in shell and get response back").parameters(
-        generateSchemaFromDataClass(ShellCommandInput::class)
-    ).response(
-        generateSchemaFromDataClass(ShellCommandOutput::class)
+val functions = listOf(WriteFileFunction(), ShellCommandFunction())
 
-    ).build()
-
-
-val writeFileDeclaration =
-    FunctionDeclaration.builder().name("write_file").description("Write content to a specified file.")
-        .parameters(generateSchemaFromDataClass(WriteFileInput::class)).response(
-            generateSchemaFromDataClass(WriteFileOutput::class)
-        ).build()
-
+val functionsMap = functions.groupBy { it::class.findAnnotation<ToolName>()!!.name }.mapValues { it.value.first() }
 
 suspend fun main() {
     val apiKey = System.getenv("GEMINI_KEY")
@@ -57,12 +43,7 @@ suspend fun main() {
     val first = Content.builder().role("user").parts(listOf(Part.builder().text(firstPrompt).build())).build()
     val history = mutableListOf(first)
     val tools = listOf(
-        Tool.builder().functionDeclarations(
-            listOf(
-                shellCommandDeclaration,
-                writeFileDeclaration,
-            )
-        ).build(),
+        Tool.builder().functionDeclarations(functionsMap.values.map { it.toFunctionDeclaration() }).build(),
     )
 
     val pendingPrompts = mutableListOf<Content>()
@@ -89,48 +70,25 @@ suspend fun main() {
             val functionCall = response.functionCalls()!!.first()
             val functionName = functionCall.name().get()
             val args = functionCall.args().get()
-            when (functionName) {
-                "shell_command" -> {
-                    val input = createInstanceFromMapWithJackson(ShellCommandInput::class, args)
-                    println("!!! I want to execute a shell command. Do you confirm? ${input.command}")
-                    val response = readLine()
-                    if (response != "yes") {
-                        val content = Content.builder().role("user")
-                            .parts(listOf(Part.builder().text("I do not allow running this command").build())).build()
-                        pendingPrompts.add(content)
-                    } else {
-                        val output = shellCommand(input)
-                        val partFunctionResponse = Part.builder().functionResponse(
-                            FunctionResponse.builder().name(functionName).response(
-                                dataClassToMap(output)
-                            ).build()
-                        ).build()
-                        val contentFunctionResponse =
-                            Content.builder().role("user").parts(listOf(partFunctionResponse)).build()
-                        pendingPrompts.add(contentFunctionResponse)
-                    }
-                }
-
-                "write_file" -> {
-                    val input = createInstanceFromMapWithJackson(WriteFileInput::class, args)
-
-                    println("!!! I want to write to the file ${input.fileName}. Do you confirm?")
-                    val userConfirmation = readLine()
-
-                    val result = if (userConfirmation == "yes") {
-                        writeFile(input)
-                    } else {
-                        val statusMessage = "File write operation to ${input.fileName} was cancelled by the user."
-                        WriteFileOutput(success = false, error = statusMessage)
-                    }
-
-                    val partFunctionResponse = Part.builder().functionResponse(
-                        FunctionResponse.builder().name(functionName).response(dataClassToMap(result)).build()
+            val function = functionsMap[functionName] ?: throw IllegalStateException("Unknown function: $functionName")
+            val functionPrompt = function.prompt(input = args)
+            println("!!! Function call ${functionPrompt}. Do you confirm?")
+            val response = readLine()
+            if (response != "yes") {
+                val content = Content.builder().role("user")
+                    .parts(listOf(Part.builder().text("I do not allow running this function. $response").build()))
+                    .build()
+                pendingPrompts.add(content)
+            } else {
+                val output = function.execute(args)
+                val partFunctionResponse = Part.builder().functionResponse(
+                    FunctionResponse.builder().name(functionName).response(
+                        dataClassToMap(output)
                     ).build()
-                    val contentFunctionResponse =
-                        Content.builder().role("user").parts(listOf(partFunctionResponse)).build()
-                    pendingPrompts.add(contentFunctionResponse)
-                }
+                ).build()
+                val contentFunctionResponse =
+                    Content.builder().role("user").parts(listOf(partFunctionResponse)).build()
+                pendingPrompts.add(contentFunctionResponse)
             }
         } else if (response.text() != null) {
             println("< ${response.text()}")

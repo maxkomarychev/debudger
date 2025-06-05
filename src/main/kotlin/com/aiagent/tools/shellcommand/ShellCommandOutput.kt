@@ -1,9 +1,10 @@
 package com.aiagent.tools.shellcommand
 
-import com.aiagent.ToolDoc
+import com.aiagent.com.aiagent.tools.AiFunctionOutput
+import com.aiagent.com.aiagent.tools.ToolDescription
 
 data class ShellCommandOutput(
-    @ToolDoc("Exit code of the command. 0 means success.") val exitCode: Int,
-    @ToolDoc("Standard output of the command") val stdout: String,
-    @ToolDoc("Error output of the command") val stderr: String,
-)
+    @ToolDescription("Exit code of the command. 0 means success.") val exitCode: Int,
+    @ToolDescription("Standard output of the command") val stdout: String,
+    @ToolDescription("Error output of the command") val stderr: String,
+) : AiFunctionOutput

@@ -1,12 +1,26 @@
 package com.aiagent.com.aiagent.utils
 
-import com.aiagent.ToolDoc
+import com.aiagent.com.aiagent.tools.AiFunction
+import com.aiagent.com.aiagent.tools.ToolDescription
+import com.aiagent.com.aiagent.tools.ToolName
+import com.google.genai.types.FunctionDeclaration
 import com.google.genai.types.Schema
 import com.google.genai.types.Type
 import kotlin.reflect.KClass
 import kotlin.reflect.full.findAnnotation
+import kotlin.reflect.full.memberFunctions
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.full.primaryConstructor
+
+fun AiFunction.toFunctionDeclaration(): FunctionDeclaration {
+    val executeType = this::class.memberFunctions.find { it.name == "execute" }
+    return FunctionDeclaration.builder()
+        .name(this::class.findAnnotation<ToolName>()?.name)
+        .description(this::class.findAnnotation<ToolDescription>()?.description)
+        .parameters(generateSchemaFromDataClass(inputType))
+        .response(generateSchemaFromDataClass(outputType))
+        .build()
+}
 
 fun KClass<*>.toSchemaType(): Type.Known {
     return when (this) {
@@ -20,9 +34,9 @@ fun KClass<*>.toSchemaType(): Type.Known {
 }
 
 fun generateSchemaFromDataClass(dataClass: KClass<*>): Schema {
-    if (!dataClass.isData) {
-        throw IllegalArgumentException("Input class '${dataClass.simpleName}' must be a data class.")
-    }
+//    if (!dataClass.isData) {
+//        throw IllegalArgumentException("Input class '${dataClass.simpleName}' must be a data class.")
+//    }
 
     val propertiesSchema = mutableMapOf<String, Schema>()
     val primaryConstructor = dataClass.primaryConstructor
@@ -36,10 +50,10 @@ fun generateSchemaFromDataClass(dataClass: KClass<*>): Schema {
         // Find description:
         // 1. From @ToolDoc on the property itself.
         // 2. From @ToolDoc on the corresponding constructor parameter.
-        var description: String? = prop.findAnnotation<ToolDoc>()?.description
+        var description: String? = prop.findAnnotation<ToolDescription>()?.description
         if (description == null) {
             primaryConstructor?.parameters?.find { it.name == prop.name }?.let { constructorParam ->
-                description = constructorParam.findAnnotation<ToolDoc>()?.description
+                description = constructorParam.findAnnotation<ToolDescription>()?.description
             }
         }
 

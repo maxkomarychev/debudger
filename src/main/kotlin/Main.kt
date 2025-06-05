@@ -18,21 +18,18 @@ val functionsMap = functions.groupBy { it::class.findAnnotation<ToolName>()!!.na
 suspend fun main() {
     val apiKey = System.getenv("GEMINI_KEY")
 //    val modelId = "gemini-2.0-flash"
-    val modelId = "gemini-2.5-flash-preview-05-20"
-//    val modelId = "gemini-2.5-pro-preview-05-06"
+//    val modelId = "gemini-2.5-flash-preview-05-20"
+    val modelId = "gemini-2.5-pro-preview-06-05"
     val client = Client.builder().apiKey(apiKey).httpOptions(HttpOptions.builder().apiVersion("v1beta").build()).build()
     val currentDir = System.getProperty("user.dir")
     val firstPrompt = """
-        You are an agent which helps engineers solve technical problems.
-        You may be asked to:
-            - do a research
-            - fix a bug
-            - edit code
-            - etc
-
-        If user is asking to do something first consider using shell_command with any of known CLI tools.
+        Your goal is to solve technical problem, do research or answer any questions.
+        Use any available tools at your discretion whenever you believe it will help you achieve this goal.
+        Don't ask for permission before using a tool; if you think it's necessary, use it.
+        When a tool call fails try a different approach.
         
-        Your goal is to solve my technical problem. Use any available tools at your discretion whenever you believe it will help you achieve this goal. Don't ask for permission before using a tool; if you think it's necessary, use it.
+        Maintain a To-Do list. When getting a question create a list of steps needed to solve the problem or
+        find an answer. Periodically consult the list, add/remove or complete items in the list as needed.
         
         Your current directory is $currentDir.
         

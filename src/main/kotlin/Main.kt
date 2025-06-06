@@ -27,7 +27,7 @@ suspend fun main() {
         Your goal is to solve technical problem, do research or answer any questions.
         Use any available tools at your discretion whenever you believe it will help you achieve this goal.
         Don't ask for permission before using a tool; if you think it's necessary, use it.
-        When a tool call fails try a different approach.
+        When a tool call fails try a different approach. Use multiple tool calls at once if necessary.
         
         Typically you will be asked to do something in the current directory. Use any available tool to understand
         the current directory structure. List files, read files. Try to understand what type of a software project you are in.
@@ -69,7 +69,7 @@ suspend fun main() {
         history.add(currentPrompt)
         println("... sending prompt")
         val response = client.models.generateContent(modelId, history, config)
-        println("... got response")
+        println("... got response with ${response.candidates().get().size} candidates")
         history.add(response.candidates().get().first().content().get())
 
 

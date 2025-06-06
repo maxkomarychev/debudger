@@ -19,18 +19,25 @@ val functionsMap = functions.groupBy { it::class.findAnnotation<ToolName>()!!.na
 suspend fun main() {
     val apiKey = System.getenv("GEMINI_KEY")
 //    val modelId = "gemini-2.0-flash"
-//    val modelId = "gemini-2.5-flash-preview-05-20"
-    val modelId = "gemini-2.5-pro-preview-06-05"
+    val modelId = "gemini-2.5-flash-preview-05-20"
+//    val modelId = "gemini-2.5-pro-preview-06-05"
     val client = Client.builder().apiKey(apiKey).httpOptions(HttpOptions.builder().apiVersion("v1beta").build()).build()
     val currentDir = System.getProperty("user.dir")
     val firstPrompt = """
         Your goal is to solve technical problem, do research or answer any questions.
         Use any available tools at your discretion whenever you believe it will help you achieve this goal.
-        Don't ask for permission before using a tool; if you think it's necessary, use it.
-        When a tool call fails try a different approach. Use multiple tool calls at once if necessary.
+        Don't ask for permission before using a tool. If you think it's necessary just use it.
+        Use multiple tool calls at once if necessary.
         
-        Typically you will be asked to do something in the current directory. Use any available tool to understand
-        the current directory structure. List files, read files. Try to understand what type of a software project you are in.
+        Understand the task you need to solve.
+        
+        Understand the structure of the current directory and its content.
+        Try to understand:
+            1. the language the project is using
+            2. if there are typical files with dependencies and build scripts
+            3. if there are folders with source code
+            
+        Communicate your finding back to a user in a concise form.
         
         Once you understand the task and the structure of the current directory create a To-Do list.
         The list should contain steps you would need to execute in order to achieve the goal.
@@ -38,10 +45,6 @@ suspend fun main() {
         Consult your own To-Do list regularly and update it as you proceed.
         
         Your current directory is $currentDir.
-        
-        When answering a user read entire history of the conversation.
-        
-        Good luck!
     """.trimIndent()
     val first = Content.builder().role("user").parts(listOf(Part.builder().text(firstPrompt).build())).build()
     val history = mutableListOf(first)

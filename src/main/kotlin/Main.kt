@@ -1,6 +1,7 @@
 package com.aiagent
 
 import com.aiagent.com.aiagent.tools.ToolName
+import com.aiagent.com.aiagent.tools.readFile.ReadFileFunction
 import com.aiagent.com.aiagent.tools.shellcommand.ShellCommandFunction
 import com.aiagent.com.aiagent.tools.writefile.WriteFileFunction
 import com.aiagent.com.aiagent.utils.toFunctionDeclaration
@@ -11,15 +12,15 @@ import kotlin.jvm.optionals.getOrNull
 import kotlin.reflect.full.findAnnotation
 
 
-val functions = listOf(WriteFileFunction(), ShellCommandFunction())
+val functions = listOf(WriteFileFunction(), ShellCommandFunction(), ReadFileFunction())
 
 val functionsMap = functions.groupBy { it::class.findAnnotation<ToolName>()!!.name }.mapValues { it.value.first() }
 
 suspend fun main() {
     val apiKey = System.getenv("GEMINI_KEY")
 //    val modelId = "gemini-2.0-flash"
-    val modelId = "gemini-2.5-flash-preview-05-20"
-//    val modelId = "gemini-2.5-pro-preview-06-05"
+//    val modelId = "gemini-2.5-flash-preview-05-20"
+    val modelId = "gemini-2.5-pro-preview-06-05"
     val client = Client.builder().apiKey(apiKey).httpOptions(HttpOptions.builder().apiVersion("v1beta").build()).build()
     val currentDir = System.getProperty("user.dir")
     val firstPrompt = """
@@ -28,8 +29,13 @@ suspend fun main() {
         Don't ask for permission before using a tool; if you think it's necessary, use it.
         When a tool call fails try a different approach.
         
-        Maintain a To-Do list. When getting a question create a list of steps needed to solve the problem or
-        find an answer. Periodically consult the list, add/remove or complete items in the list as needed.
+        Typically you will be asked to do something in the current directory. Use any available tool to understand
+        the current directory structure. List files, read files. Try to understand what type of a software project you are in.
+        
+        Once you understand the task and the structure of the current directory create a To-Do list.
+        The list should contain steps you would need to execute in order to achieve the goal.
+        Let the user confirm the list before you start executing the steps.
+        Consult your own To-Do list regularly and update it as you proceed.
         
         Your current directory is $currentDir.
         
@@ -44,7 +50,9 @@ suspend fun main() {
     )
 
     val pendingPrompts = mutableListOf<Content>()
-    val config = GenerateContentConfig.builder().tools(tools).build()
+    val config =
+        GenerateContentConfig.builder().tools(tools).httpOptions(HttpOptions.builder().timeout(10e3.toInt()).build())
+            .build()
 
     while (true) {
 
@@ -59,7 +67,9 @@ suspend fun main() {
 
         val currentPrompt = pendingPrompts.removeFirst()
         history.add(currentPrompt)
+        println("... sending prompt")
         val response = client.models.generateContent(modelId, history, config)
+        println("... got response")
         history.add(response.candidates().get().first().content().get())
 
 

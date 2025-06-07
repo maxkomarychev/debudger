@@ -7,6 +7,8 @@ import com.aiagent.com.aiagent.tools.ToolName
 import com.aiagent.tools.shellcommand.ShellCommandInput
 import com.aiagent.tools.shellcommand.ShellCommandOutput
 import com.aiagent.utils.createInstanceFromMapWithJackson
+import java.io.PipedInputStream
+import java.io.PipedOutputStream
 
 @ToolName("shell_command")
 @ToolDescription("Execute any arbitrary command and get back status code, stdout and stderr.")

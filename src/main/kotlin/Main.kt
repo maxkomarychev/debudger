@@ -29,6 +29,8 @@ suspend fun main() {
         Don't ask for permission before using a tool. If you think it's necessary just use it.
         Use multiple tool calls at once if necessary.
         
+        Shen running a shell command chose options which make it non-interactive.
+        
         Understand the task you need to solve.
         
         Understand the structure of the current directory and its content.

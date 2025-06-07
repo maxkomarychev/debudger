@@ -22,6 +22,7 @@ class WriteFileFunction : AiFunction {
             File(typedInput.path).writeText(typedInput.content)
             WriteFileOutput(success = true, error = null)
         } catch (e: Exception) {
+            println("... could not write file: $e")
             val errorMessage = "Error writing to ${typedInput.path}: ${e.message}"
             WriteFileOutput(success = false, error = errorMessage)
         }

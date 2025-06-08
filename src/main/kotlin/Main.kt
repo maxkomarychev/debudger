@@ -31,6 +31,8 @@ suspend fun main() {
         
         When running a shell command chose options which make it non-interactive.
         
+        If user denies usage of a command find an alternative way to achieve the goal.
+        
         Understand the task you need to solve.
         
         Understand the structure of the current directory and its content.

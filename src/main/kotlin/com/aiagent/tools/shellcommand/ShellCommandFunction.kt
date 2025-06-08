@@ -17,7 +17,7 @@ class ShellCommandFunction : AiFunction {
     override val outputType = ShellCommandOutput::class
     override suspend fun execute(input: Map<String, Any>): AiFunctionOutput {
         val typedInput = createInstanceFromMapWithJackson(ShellCommandInput::class, input)
-        val process = Runtime.getRuntime().exec(typedInput.command)
+        val process = ProcessBuilder("sh", "-c", typedInput.command).start()
         val exitCode = process.waitFor()
         println("EXIT CODE: $exitCode")
         val stdout = process.inputStream.bufferedReader().readText()

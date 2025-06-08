@@ -29,7 +29,7 @@ suspend fun main() {
         Don't ask for permission before using a tool. If you think it's necessary just use it.
         Use multiple tool calls at once if necessary.
         
-        Shen running a shell command chose options which make it non-interactive.
+        When running a shell command chose options which make it non-interactive.
         
         Understand the task you need to solve.
         
@@ -107,18 +107,18 @@ suspend fun main() {
             }
         } else if (response.text() != null) {
             println("< ${response.text()}")
-            println(
-                """
+        }
+        println(
+            """
                 Usage:
                   tokens total: ${response.usageMetadata().getOrNull()?.totalTokenCount()?.getOrNull()}
                   tokens prompt (in): ${response.usageMetadata().getOrNull()?.promptTokenCount()?.getOrNull()}
                   tokens candidates (out): ${
-                    response.usageMetadata().getOrNull()?.cachedContentTokenCount()?.getOrNull()
-                }
+                response.usageMetadata().getOrNull()?.cachedContentTokenCount()?.getOrNull()
+            }
                   tokens cached: ${response.usageMetadata().getOrNull()?.cachedContentTokenCount()?.getOrNull()}
                   tokens tools: ${response.usageMetadata().getOrNull()?.toolUsePromptTokenCount()?.getOrNull()}
             """.trimIndent()
-            )
-        }
+        )
     }
 }

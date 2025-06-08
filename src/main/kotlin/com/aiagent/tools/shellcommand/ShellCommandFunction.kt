@@ -11,7 +11,12 @@ import java.io.PipedInputStream
 import java.io.PipedOutputStream
 
 @ToolName("shell_command")
-@ToolDescription("Execute any arbitrary command and get back status code, stdout and stderr.")
+@ToolDescription("""
+Execute any arbitrary command and get back status code, stdout and stderr.
+IMPORTANT: Note about `cd`. The current directory is not preserved between commands.
+If you need to perform various commands in a certain directory as part of different function calls
+you must have `cd <specific directory>` in each command.
+""")
 class ShellCommandFunction : AiFunction {
     override val inputType = ShellCommandInput::class
     override val outputType = ShellCommandOutput::class

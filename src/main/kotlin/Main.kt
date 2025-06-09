@@ -6,17 +6,38 @@ import com.aiagent.com.aiagent.tools.shellcommand.ShellCommandFunction
 import com.aiagent.com.aiagent.tools.writefile.WriteFileFunction
 import com.aiagent.com.aiagent.utils.toFunctionDeclaration
 import com.aiagent.utils.dataClassToMap
+import com.github.ajalt.mordant.animation.progress.animateOnThread
+import com.github.ajalt.mordant.animation.progress.execute
+import com.github.ajalt.mordant.markdown.Markdown
+import com.github.ajalt.mordant.rendering.TextColors
+import com.github.ajalt.mordant.rendering.TextStyle
+import com.github.ajalt.mordant.rendering.TextStyles
+import com.github.ajalt.mordant.terminal.StringPrompt
+import com.github.ajalt.mordant.terminal.Terminal
+import com.github.ajalt.mordant.terminal.YesNoPrompt
+import com.github.ajalt.mordant.widgets.Spinner
+import com.github.ajalt.mordant.widgets.progress.progressBarLayout
+import com.github.ajalt.mordant.widgets.progress.spinner
+import com.github.ajalt.mordant.widgets.progress.text
+import com.github.ajalt.mordant.widgets.progress.timeElapsed
 import com.google.genai.Client
 import com.google.genai.types.*
 import kotlin.jvm.optionals.getOrNull
 import kotlin.reflect.full.findAnnotation
 
+fun logging(text: String): String = TextColors.gray(text)
+fun highlighted(text: String): String = TextStyles.bold(TextColors.blue(text))
 
-val functions = listOf(WriteFileFunction(), ShellCommandFunction(), ReadFileFunction())
+val write = WriteFileFunction()
+val shell = ShellCommandFunction()
+val read = ReadFileFunction()
+val functions = listOf(write, shell, read)
+val allowedFunctions = setOf(read, write)
 
 val functionsMap = functions.groupBy { it::class.findAnnotation<ToolName>()!!.name }.mapValues { it.value.first() }
 
 suspend fun main() {
+    val terminal = Terminal()
     val apiKey = System.getenv("GEMINI_KEY")
 //    val modelId = "gemini-2.0-flash"
     val modelId = "gemini-2.5-flash-preview-05-20"
@@ -64,21 +85,23 @@ suspend fun main() {
     while (true) {
 
         if (pendingPrompts.isEmpty()) {
-            val userInput = readLine()
-            if (userInput == "exit") {
-                break
-            }
+            val userInput = StringPrompt(prompt = TextColors.yellow("Enter your prompt"), terminal = terminal).ask()!!
             val content = Content.builder().role("user").parts(listOf(Part.builder().text(userInput).build())).build()
             pendingPrompts.add(content)
         }
 
         val currentPrompt = pendingPrompts.removeFirst()
         history.add(currentPrompt)
-        println("... sending prompt")
+        val progress = progressBarLayout(alignColumns = false) {
+            text(logging("Generating response..."))
+            spinner(Spinner.Dots())
+            timeElapsed(compact = false, style = TextStyle(color = TextColors.gray))
+        }.animateOnThread(terminal)
+        progress.execute()
         val response = client.models.generateContent(modelId, history, config)
-        println("... got response with ${response.candidates().get().size} candidates")
+        progress.stop()
+        terminal.println(logging("Got response with ${response.candidates().get().size} candidates"))
         history.add(response.candidates().get().first().content().get())
-
 
         if (response.functionCalls() != null && response.functionCalls()!!.isNotEmpty()) {
             val functionCall = response.functionCalls()!!.first()
@@ -86,41 +109,62 @@ suspend fun main() {
             val args = functionCall.args().get()
             val function = functionsMap[functionName] ?: throw IllegalStateException("Unknown function: $functionName")
             val functionPrompt = function.prompt(input = args)
-            println(
-                """!!! Function call ${functionPrompt}
-                Do you confirm?""".trimIndent()
-            )
-            val response = readLine()
-            if (response != "yes") {
+            val yesno = if (allowedFunctions.contains(function)) {
+                true
+            } else {
+                YesNoPrompt(
+                    prompt = """
+                    ${TextColors.yellow("Function call")}
+                    ${TextStyles.bold(TextColors.brightBlue(functionPrompt))}
+                    ${TextColors.yellow("Confirm?")}
+                    """.trimIndent(), default = true, terminal = terminal
+                ).ask()!!
+            }
+            if (!yesno) {
+                val clarification =
+                    StringPrompt(prompt = "Clarify your answer (optional).", terminal = terminal).ask() ?: ""
                 val content = Content.builder().role("user")
-                    .parts(listOf(Part.builder().text("I do not allow running this function. $response").build()))
+                    .parts(listOf(Part.builder().text("I do not allow running this function. $clarification").build()))
                     .build()
                 pendingPrompts.add(content)
             } else {
-                val output = function.execute(args)
+
+                val progress = progressBarLayout(alignColumns = false) {
+                    text(logging("Executing function $functionName..."))
+                    spinner(Spinner.Dots())
+                    timeElapsed(compact = false, style = TextStyle(color = TextColors.gray))
+                }.animateOnThread(terminal)
+                progress.execute()
+                val output = function.execute(args, terminal)
+                progress.stop()
                 val partFunctionResponse = Part.builder().functionResponse(
                     FunctionResponse.builder().name(functionName).response(
                         dataClassToMap(output)
                     ).build()
                 ).build()
-                val contentFunctionResponse =
-                    Content.builder().role("user").parts(listOf(partFunctionResponse)).build()
+                val contentFunctionResponse = Content.builder().role("user").parts(listOf(partFunctionResponse)).build()
                 pendingPrompts.add(contentFunctionResponse)
             }
         } else if (response.text() != null) {
-            println("< ${response.text()}")
+            val text = response.text()!!
+            val md = Markdown(text)
+            terminal.println(md)
         }
-        println(
-            """
+        terminal.println(
+            TextStyles.dim(
+                TextColors.green(
+                    """
                 Usage:
                   tokens total: ${response.usageMetadata().getOrNull()?.totalTokenCount()?.getOrNull()}
                   tokens prompt (in): ${response.usageMetadata().getOrNull()?.promptTokenCount()?.getOrNull()}
                   tokens candidates (out): ${
-                response.usageMetadata().getOrNull()?.cachedContentTokenCount()?.getOrNull()
-            }
+                        response.usageMetadata().getOrNull()?.cachedContentTokenCount()?.getOrNull()
+                    }
                   tokens cached: ${response.usageMetadata().getOrNull()?.cachedContentTokenCount()?.getOrNull()}
                   tokens tools: ${response.usageMetadata().getOrNull()?.toolUsePromptTokenCount()?.getOrNull()}
             """.trimIndent()
+                )
+            )
         )
     }
 }
